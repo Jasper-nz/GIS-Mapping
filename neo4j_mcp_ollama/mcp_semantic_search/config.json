@@ -1,0 +1,12 @@
+{
+  "model": "llama3",
+  "searxng_instances": [
+    "https://html.duckduckgo.com/html/"
+  ],
+  "max_results": 8,
+  "timeout": 100,
+  "max_retries": 3,
+  "history_file": "search_history.json",
+  "enable_colors": true,
+  "streaming_delay": 0.02
+}

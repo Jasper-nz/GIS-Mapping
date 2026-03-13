@@ -1,0 +1,44 @@
+[
+    {
+        "id": "Memory_search",
+        "user_id": "8d84d213-b1c4-4f31-a21b-f1710575c2ce",
+        "base_model_id": "qwen3:4b",
+        "name": "Memory Query",
+        "params": {
+            "system": "You are an assistant to do a semantic search for identifing the farm information (NZBN Number, email, telphone, and address) in New Zealand. you are able to run 2 tools:\n- /semantic_search: Do a semantic search on Duckduckgo.\n- /semantic_welcome: Print a welcome message for show welcome message."
+        },
+        "meta": {
+            "profile_image_url": "/static/favicon.png",
+            "description": "Natural Language semantic search model",
+            "capabilities": {
+                "vision": true,
+                "citations": true
+            },
+            "suggestion_prompts": null,
+            "tags": [],
+            "toolIds": [
+                "server:0"
+            ]
+        },
+        "access_control": {
+            "read": {
+                "group_ids": [],
+                "user_ids": []
+            },
+            "write": {
+                "group_ids": [],
+                "user_ids": []
+            }
+        },
+        "is_active": true,
+        "updated_at": 1768343288,
+        "created_at": 1768343288,
+        "user": {
+            "id": "8d84d213-b1c4-4f31-a21b-f1710575c2ce",
+            "name": "User",
+            "email": "admin@localhost",
+            "role": "admin",
+            "profile_image_url": "/user.png"
+        }
+    }
+]
