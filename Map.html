@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Map Visualization</title>
+
+    <!-- Leaflet -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.2/dist/leaflet.css"
+    />
+    <script src="https://unpkg.com/leaflet@1.9.2/dist/leaflet.js"></script>
+
+    <!-- Neo4j -->
+    <script src="https://unpkg.com/neo4j-driver"></script>
+
+    <style>
+      html,
+      body,
+      #map {
+        height: 100%;
+        margin: 0;
+      }
+      
+      .legend {
+        position: absolute;
+        bottom: 20px;
+        left: 10px;
+        background: white;
+        padding: 15px;
+        border-radius: 5px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        z-index: 1000;
+        font-family: Arial, sans-serif;
+        max-width: 250px;
+      }
+      
+      .legend h3 {
+        margin: 0 0 10px 0;
+        font-size: 16px;
+      }
+      
+      .legend-item {
+        display: flex;
+        align-items: center;
+        margin: 8px 0;
+        cursor: pointer;
+      }
+      
+      .legend-item input[type="checkbox"] {
+        margin-right: 8px;
+      }
+      
+      .legend-color {
+        width: 20px;
+        height: 20px;
+        margin-right: 8px;
+        border: 1px solid #333;
+        border-radius: 3px;
+      }
+      
+      .legend-label {
+        font-size: 14px;
+      }
+
+      /* Chat Toggle Button */
+      #chatToggle {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        z-index: 1001;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+      }
+
+      #chatToggle:hover {
+        transform: scale(1.1);
+        box-shadow: 0 6px 16px rgba(102, 126, 234, 0.6);
+      }
+
+      #chatToggle svg {
+        width: 28px;
+        height: 28px;
+        fill: white;
+      }
+
+      #chatToggle .chat-icon {
+        font-size: 28px;
+      }
+
+      /* Chat Container */
+      #chatContainer {
+        position: fixed;
+        bottom: 100px;
+        right: 20px;
+        width: 400px;
+        height: 600px;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+        z-index: 1000;
+        display: none;
+        flex-direction: column;
+        overflow: hidden;
+        animation: slideIn 0.3s ease;
+      }
+
+      #chatContainer.active {
+        display: flex;
+      }
+
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* Chat Header */
+      .chat-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 16px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .chat-header h3 {
+        font-size: 16px;
+        font-weight: 600;
+      }
+
+      .close-btn {
+        background: none;
+        border: none;
+        color: white;
+        cursor: pointer;
+        font-size: 24px;
+        line-height: 1;
+        padding: 0;
+        width: 24px;
+        height: 24px;
+      }
+
+      .close-btn:hover {
+        opacity: 0.8;
+      }
+
+      /* Chat Frame */
+      #chatFrame {
+        flex: 1;
+        border: none;
+        width: 100%;
+      }
+
+      /* Mobile Responsive */
+      @media (max-width: 768px) {
+        #chatContainer {
+          width: calc(100vw - 40px);
+          height: calc(100vh - 140px);
+          right: 20px;
+          left: 20px;
+          bottom: 100px;
+        }
+      }
+
+      /* Status Indicator */
+      .status-indicator {
+        width: 8px;
+        height: 8px;
+        background: #4ade80;
+        border-radius: 50%;
+        margin-right: 8px;
+        display: inline-block;
+        animation: pulse 2s infinite;
+      }
+
+      @keyframes pulse {
+        0%, 100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+
+      /* Search Box */
+      #mapSearch {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        width: 350px;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        z-index: 1000;
+        overflow: hidden;
+      }
+
+      #mapSearch input {
+        width: 100%;
+        padding: 12px 16px;
+        border: none;
+        font-size: 14px;
+        outline: none;
+        font-family: Arial, sans-serif;
+      }
+
+      #mapSearch input::placeholder {
+        color: #999;
+      }
+
+      #searchResults {
+        max-height: 300px;
+        overflow-y: auto;
+        border-top: 1px solid #eee;
+      }
+
+      .search-result-item {
+        padding: 12px 16px;
+        border-bottom: 1px solid #f0f0f0;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+
+      .search-result-item:hover {
+        background: #f5f5f5;
+      }
+
+      .search-result-item strong {
+        color: #333;
+        display: block;
+        margin-bottom: 4px;
+      }
+
+      .search-result-item small {
+        color: #666;
+        font-size: 12px;
+      }
+
+      .no-results {
+        padding: 20px;
+        text-align: center;
+        color: #999;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="map"></div>
+
+    <!-- Map Search Box -->
+    <div id="mapSearch">
+      <input 
+        type="text" 
+        id="searchInput" 
+        placeholder="Search consents, parcels, irrigation, or soil..."
+      />
+      <div id="searchResults"></div>
+    </div>
+	
+	<div class="legend">
+      <h3>Legend</h3>
+      
+      <label class="legend-item">
+        <input type="checkbox" id="consentToggle" checked>
+        <div class="legend-color" style="background-color: #ef4444; border-radius: 50%;"></div>
+        <span class="legend-label">Consents</span>
+      </label>
+      
+      <label class="legend-item">
+        <input type="checkbox" id="parcelToggle" checked>
+        <div class="legend-color" style="background-color: #86efac;"></div>
+        <span class="legend-label">Parcels</span>
+      </label>
+      
+      <label class="legend-item">
+        <input type="checkbox" id="irrigationToggle" checked>
+        <div class="legend-color" style="background-color: #3b82f6;"></div>
+        <span class="legend-label">Irrigation</span>
+      </label>
+      
+      <label class="legend-item">
+        <input type="checkbox" id="soilToggle" checked>
+        <div class="legend-color" style="background-color: #d97706;"></div>
+        <span class="legend-label">Soil</span>
+      </label>
+    </div>
+
+    <!-- Chat Toggle Button -->
+    <button id="chatToggle" aria-label="Toggle Chat">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
+      </svg>
+    </button>
+
+    <!-- Chat Container -->
+    <div id="chatContainer">
+      <div class="chat-header">
+        <div style="display: flex; align-items: center;">
+          <span class="status-indicator"></span>
+        </div>
+        <button class="close-btn" id="closeChat" aria-label="Close Chat">&times;</button>
+      </div>
+      <iframe 
+        id="chatFrame"
+        src="http://localhost:8088"
+        allow="microphone; camera"
+        title="Open WebUI Chat">
+      </iframe>
+    </div>
+
+    <script>
+      /* ===============================
+         Neo4j connection
+      =============================== */
+      const driver = neo4j.driver(
+        "neo4j://127.0.0.1:7687",
+        neo4j.auth.basic("neo4j", "12345678"),
+      );
+
+      driver
+        .verifyConnectivity()
+        .then(() => console.log("✅ Connected to Neo4j"))
+        .catch(console.error);
+
+      /* ===============================
+         Map setup
+      =============================== */
+      const map = L.map("map").setView([-43.58, 172.15], 11);
+
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "&copy; OpenStreetMap",
+      }).addTo(map);
+
+      /* ===============================
+         Data storage for all layers
+      =============================== */
+      const consentData = [];
+      const parcelData = [];
+      const irrigationData = [];
+      const soilData = [];
+
+      /* ===============================
+         Consent layer
+      =============================== */
+      const consentLayer = L.layerGroup().addTo(map);
+
+      /* ===============================
+         Parcel layer
+      =============================== */
+      const parcelLayer = L.geoJSON(null, {
+        style: {
+          color: "#16a34a",      // border
+          fillColor: "#86efac",  // fill
+          weight: 1,
+          fillOpacity: 0.35,
+        },
+        onEachFeature: (feature, layer) => {
+          const props = feature.properties;
+          layer.bindPopup(
+            `<b>Parcel</b><br>
+             <b>ID:</b> ${props.id || "N/A"}<br>
+             <b>Appellation:</b> ${props.Appellation || "N/A"}<br>
+             <b>Status:</b> ${props.Status || "N/A"}<br>
+             <b>Parcel Intent:</b> ${props.Parcel_Intent || "N/A"}<br>
+             <b>Land District:</b> ${props.Land_District || "N/A"}<br>
+             <b>Survey Area:</b> ${props.Survey_Area || "N/A"}<br>
+             <b>Calc Area:</b> ${props.CalcArea || "N/A"}<br>
+             <b>Titles:</b> ${props.Titles || "N/A"}<br>
+             <b>Topology Type:</b> ${props.Topology_Type || "N/A"}<br>
+             <b>Affected Survey:</b> ${props.Affected_Survey || "N/A"}`
+          );
+
+          // Optional hover highlight
+          layer.on({
+            mouseover: () => layer.setStyle({ weight: 3 }),
+            mouseout: () => layer.setStyle({ weight: 1 }),
+          });
+
+          // Store parcel data for searching
+          const bounds = layer.getBounds();
+          const center = bounds.getCenter();
+          parcelData.push({
+            id: props.id || "N/A",
+            appellation: props.Appellation || "N/A",
+            status: props.Status || "N/A",
+            parcelIntent: props.Parcel_Intent || "N/A",
+            landDistrict: props.Land_District || "N/A",
+            surveyArea: props.Survey_Area || "N/A",
+            calcArea: props.CalcArea || "N/A",
+            titles: props.Titles || "N/A",
+            topologyType: props.Topology_Type || "N/A",
+            affectedSurvey: props.Affected_Survey || "N/A",
+            lat: center.lat,
+            lon: center.lng,
+            bounds: bounds,
+            layer: layer,
+            layerType: 'parcel'
+          });
+        },
+      }).addTo(map);
+	  
+	  /* ===============================
+         Irrigation layer
+      =============================== */
+      const irrigationLayer = L.geoJSON(null, {
+        style: {
+          color: "#1e40af",
+          fillColor: "#3b82f6",
+          weight: 2,
+          fillOpacity: 0.4,
+        },
+        onEachFeature: (feature, layer) => {
+          const props = feature.properties;
+          layer.bindPopup(
+            `<b>Irrigation</b><br>
+             <b>Type:</b> ${props.Type || "N/A"}<br>
+             <b>Area(ha):</b> ${props.Area_ha || "N/A"}<br>
+             <b>Year_Irrigated:</b> ${props.Year_irr || "N/A"}<br>
+             <b>Status:</b> ${props.Status || "N/A"}<br>
+             <b>Confidence:</b> ${props.Confidence || "N/A"}<br>
+             <b>Notes:</b> ${props.Notes || "N/A"}`
+          );
+
+          layer.on({
+            mouseover: () => layer.setStyle({ weight: 3 }),
+            mouseout: () => layer.setStyle({ weight: 2 }),
+          });
+
+          // Store irrigation data for searching
+          const bounds = layer.getBounds();
+          const center = bounds.getCenter();
+          irrigationData.push({
+            type: props.Type || "N/A",
+            area: props.Area_ha || "N/A",
+            year: props.Year_irr || "N/A",
+            yearMapped: props.Year_Mapped || "N/A",
+            status: props.Status || "N/A",
+            confidence: props.Confidence || "N/A",
+            notes: props.Notes || "N/A",
+            region: props.Region || "N/A",
+            lat: center.lat,
+            lon: center.lng,
+            bounds: bounds,
+            layer: layer,
+            layerType: 'irrigation'
+          });
+        },
+      }).addTo(map);
+	  
+	   /* ===============================
+         Soil layer
+      =============================== */
+      const soilLayer = L.geoJSON(null, {
+        style: {
+          color: "#92400e",
+          fillColor: "#d97706",
+          weight: 1,
+          fillOpacity: 0.3,
+        },
+        onEachFeature: (feature, layer) => {
+          const props = feature.properties;
+          layer.bindPopup(
+            `<b>Soil</b><br>
+             <b>Name:</b> ${props.Soil_name || "N/A"}<br>
+             <b>Series:</b> ${props.Series || "N/A"}<br>
+             <b>Type:</b> ${props.Type || "N/A"}<br>
+             <b>Texture:</b> ${props.Texture || "N/A"}<br>
+             <b>Slope:</b> ${props.Slope || "N/A"}<br>
+             <b>Subgroup:</b> ${props.Subgroup || "N/A"}<br>
+             <b>Group:</b> ${props.Group || "N/A"}<br>
+             <b>Order:</b> ${props.Order || "N/A"}`
+          );
+
+          layer.on({
+            mouseover: () => layer.setStyle({ weight: 3 }),
+            mouseout: () => layer.setStyle({ weight: 1 }),
+          });
+
+          // Store soil data for searching
+          const bounds = layer.getBounds();
+          const center = bounds.getCenter();
+          soilData.push({
+            name: props.Soil_name || "N/A",
+            series: props.Series || "N/A",
+            type: props.Type || "N/A",
+            texture: props.Texture || "N/A",
+            slope: props.Slope || "N/A",
+            phase: props.Phase || "N/A",
+            code: props.Code || "N/A",
+            subgroup: props.Subgroup || "N/A",
+            group: props.Group || "N/A",
+            order: props.Order || "N/A",
+            lat: center.lat,
+            lon: center.lng,
+            bounds: bounds,
+            layer: layer,
+            layerType: 'soil'
+          });
+        },
+      }).addTo(map);
+
+
+      /* ===============================
+         Load consent locations
+      =============================== */
+      function loadConsents() {
+        const cypher = `
+          MATCH (c:Selwyn_Consent)
+          RETURN 
+                 c.consentNo AS consentNo,
+                 c.type AS type,
+                 c.status AS status,
+                 c.holderName AS holderName,
+                 c.activityText AS activity,
+                 c.location AS location
+        `;
+
+        const session = driver.session();
+
+        session
+          .run(cypher)
+          .then((result) => {
+            result.records.forEach((record) => {
+              const loc = record.get("location");
+              const lat = loc.y;
+              const lon = loc.x;
+              
+              const consentNo = record.get("consentNo") || "N/A";
+              const type = record.get("type") || "N/A";
+              const status = record.get("status") || "N/A";
+              const holderName = record.get("holderName") || "N/A";
+              const activity = record.get("activity") || "N/A";
+
+              const marker = L.circleMarker([lat, lon], {
+                radius: 6,
+                color: "#991b1b",
+                fillColor: "#ef4444",
+                fillOpacity: 0.9,
+                weight: 2
+              })
+                .addTo(consentLayer)
+                .bindPopup(
+                  `<b>Consent</b><br>
+                   <b>Consent No:</b> ${consentNo}<br>
+                   <b>Type:</b> ${type}<br>
+                   <b>Status:</b> ${status}<br>
+                   <b>Holder:</b> ${holderName}<br>
+                   <b>Activity:</b> ${activity}`
+                );
+
+              // Store consent data with marker reference for searching
+              consentData.push({
+                consentNo,
+                type,
+                status,
+                holderName,
+                activity,
+                lat,
+                lon,
+                marker,
+                layerType: 'consent'
+              });
+            });
+          })
+          .catch(console.error)
+          .then(() => session.close());
+      }
+
+      /* ===============================
+         Load parcel polygons
+      =============================== */
+      function loadParcels() {
+        const cypher = `
+          MATCH (p:Selwyn_Parcel)
+          RETURN p.id AS id,
+                 p.AffectedSurvey as Affected_Survey,
+                 p.Appellation AS Appellation,
+                 p.CalcArea as CalcArea,
+                 p.LandDistrict AS Land_District,
+                 p.ParcelIntent AS Parcel_Intent,
+                 p.Status AS Status,
+                 p.SurveyArea AS Survey_Area,
+                 p.Titles AS Titles,
+                 p.TopologyType as Topology_Type,
+                 p.geom AS geom
+        `;
+
+        const session = driver.session();
+
+        session
+          .run(cypher)
+          .then((result) => {
+            result.records.forEach((record) => {
+              const geom = JSON.parse(record.get("geom"));
+
+              const parcelFeature = {
+                type: "Feature",
+                geometry: geom,
+                properties: {
+                  id: record.get("id"),
+                  Affected_Survey: record.get("Affected_Survey"),
+                  Appellation: record.get("Appellation"),
+                  CalcArea: record.get("CalcArea"),
+                  Land_District: record.get("Land_District"),
+                  Parcel_Intent: record.get("Parcel_Intent"),
+                  Status: record.get("Status"),
+                  Survey_Area: record.get("Survey_Area"),
+                  Titles: record.get("Titles"),
+                  Topology_Type: record.get("Topology_Type")
+                },
+              };
+
+              parcelLayer.addData(parcelFeature);
+            });
+          })
+          .catch(console.error)
+          .then(() => session.close());
+      }
+	  
+	  /* ===============================
+         Load irrigation polygons
+      =============================== */
+      function loadIrrigation() {
+        const cypher = `
+          MATCH (i:Selwyn_Irrigation)
+          RETURN i.Type AS Type,
+                 i.Notes AS Notes,
+                 i.Area_ha AS Area_ha,
+                 i.Year_irr AS Year_irr,
+                 i.Year_Mapped AS Year_Mapped,
+                 i.Status AS Status,
+                 i.Confidence AS Confidence,
+                 i.Region AS Region,
+                 i.geom AS geom
+        `;
+
+        const session = driver.session();
+
+        session
+          .run(cypher)
+          .then((result) => {
+            result.records.forEach((record) => {
+              const geom = JSON.parse(record.get("geom"));
+
+              const irrigationFeature = {
+                type: "Feature",
+                geometry: geom,
+                properties: {
+                  Type: record.get("Type"),
+                  Notes: record.get("Notes"),
+                  Area_ha: record.get("Area_ha"),
+                  Year_irr: record.get("Year_irr"),
+                  Year_Mapped: record.get("Year_Mapped"),
+                  Status: record.get("Status"),
+                  Confidence: record.get("Confidence"),
+                  Region: record.get("Region"),
+                },
+              };
+
+              irrigationLayer.addData(irrigationFeature);
+            });
+          })
+          .catch(console.error)
+          .then(() => session.close());
+      }
+	  
+	  /* ===============================
+         Load soil polygons
+      =============================== */
+      function loadSoil() {
+        const cypher = `
+          MATCH (s:Selwyn_Soil)
+          RETURN s.Series AS Series,
+                 s.Type AS Type,
+                 s.Texture AS Texture,
+                 s.Phase AS Phase,
+                 s.Slope AS Slope,
+                 s.Soil_name AS Soil_name,
+                 s.Code AS Code,
+                 s.Subgroup AS Subgroup,
+                 s.Group AS Group,
+                 s.Order AS Order,
+                 s.geom AS geom
+        `;
+
+        const session = driver.session();
+
+        session
+          .run(cypher)
+          .then((result) => {
+            result.records.forEach((record) => {
+              const geom = JSON.parse(record.get("geom"));
+
+              const soilFeature = {
+                type: "Feature",
+                geometry: geom,
+                properties: {
+                  Series: record.get("Series"),
+                  Type: record.get("Type"),
+                  Texture: record.get("Texture"),
+                  Phase: record.get("Phase"),
+                  Slope: record.get("Slope"),
+                  Soil_name: record.get("Soil_name"),
+                  Code: record.get("Code"),
+                  Subgroup: record.get("Subgroup"),
+                  Group: record.get("Group"),
+                  Order: record.get("Order"),
+                },
+              };
+
+              soilLayer.addData(soilFeature);
+            });
+          })
+          .catch(console.error)
+          .then(() => session.close());
+      }
+
+      /* ===============================
+         Load everything
+      =============================== */
+      loadConsents();
+      loadParcels();
+	  loadIrrigation();
+	  loadSoil();
+	  
+	  /* ===============================
+         Layer toggle controls
+      =============================== */
+      document.getElementById("consentToggle").addEventListener("change", (e) => {
+        if (e.target.checked) {
+          map.addLayer(consentLayer);
+        } else {
+          map.removeLayer(consentLayer);
+        }
+      });
+
+      document.getElementById("parcelToggle").addEventListener("change", (e) => {
+        if (e.target.checked) {
+          map.addLayer(parcelLayer);
+        } else {
+          map.removeLayer(parcelLayer);
+        }
+      });
+
+      document.getElementById("irrigationToggle").addEventListener("change", (e) => {
+        if (e.target.checked) {
+          map.addLayer(irrigationLayer);
+        } else {
+          map.removeLayer(irrigationLayer);
+        }
+      });
+
+      document.getElementById("soilToggle").addEventListener("change", (e) => {
+        if (e.target.checked) {
+          map.addLayer(soilLayer);
+        } else {
+          map.removeLayer(soilLayer);
+        }
+      });
+
+      /* ===============================
+         Chatbox controls
+      =============================== */
+      const chatToggle = document.getElementById('chatToggle');
+      const chatContainer = document.getElementById('chatContainer');
+      const closeChat = document.getElementById('closeChat');
+
+      // Toggle chat window
+      chatToggle.addEventListener('click', () => {
+        chatContainer.classList.toggle('active');
+      });
+
+      // Close chat
+      closeChat.addEventListener('click', () => {
+        chatContainer.classList.remove('active');
+      });
+
+      // Optional: Close chat when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!chatContainer.contains(e.target) && 
+            !chatToggle.contains(e.target) && 
+            chatContainer.classList.contains('active')) {
+          chatContainer.classList.remove('active');
+        }
+      });
+
+      // Optional: Listen for messages from iframe (if Open WebUI supports postMessage)
+      window.addEventListener('message', (event) => {
+        // Verify origin for security
+        if (event.origin === 'http://localhost:8088') {
+          console.log('Message from Open WebUI:', event.data);
+          // Handle messages here if needed
+        }
+      });
+
+      /* ===============================
+         Search Functionality
+      =============================== */
+      const searchInput = document.getElementById('searchInput');
+      const searchResults = document.getElementById('searchResults');
+
+      // Debounce function to prevent too many searches
+      function debounce(func, wait) {
+        let timeout;
+        return function(...args) {
+          clearTimeout(timeout);
+          timeout = setTimeout(() => func.apply(this, args), wait);
+        };
+      }
+
+      // Search all layers
+      function searchAllLayers(query) {
+        if (!query || query.length < 2) {
+          searchResults.innerHTML = '';
+          return;
+        }
+
+        const lowerQuery = query.toLowerCase();
+        let allResults = [];
+
+        // Search consents
+        const consentResults = consentData.filter(consent => 
+          consent.consentNo.toLowerCase().includes(lowerQuery) ||
+          consent.holderName.toLowerCase().includes(lowerQuery) ||
+          consent.type.toLowerCase().includes(lowerQuery) ||
+          consent.status.toLowerCase().includes(lowerQuery)
+        ).map(c => ({
+          ...c,
+          displayText: `${c.consentNo} - ${c.holderName}`,
+          category: 'Consent',
+          categoryColor: '#ef4444'
+        }));
+
+        // Search parcels
+        const parcelResults = parcelData.filter(parcel =>
+          (parcel.id && parcel.id.toString().toLowerCase().includes(lowerQuery)) ||
+          (parcel.appellation && parcel.appellation.toLowerCase().includes(lowerQuery)) ||
+          (parcel.status && parcel.status.toLowerCase().includes(lowerQuery)) ||
+          (parcel.parcelIntent && parcel.parcelIntent.toLowerCase().includes(lowerQuery)) ||
+          (parcel.landDistrict && parcel.landDistrict.toLowerCase().includes(lowerQuery)) ||
+          (parcel.titles && parcel.titles.toLowerCase().includes(lowerQuery)) ||
+          (parcel.topologyType && parcel.topologyType.toLowerCase().includes(lowerQuery))
+        ).map(p => ({
+          ...p,
+          displayText: `Parcel ${p.id} - ${p.appellation}`,
+          category: 'Parcel',
+          categoryColor: '#86efac'
+        }));
+
+        // Search irrigation
+        const irrigationResults = irrigationData.filter(irr =>
+          (irr.type && irr.type.toLowerCase().includes(lowerQuery)) ||
+          (irr.status && irr.status.toLowerCase().includes(lowerQuery)) ||
+          (irr.notes && irr.notes.toLowerCase().includes(lowerQuery))
+        ).map(i => ({
+          ...i,
+          displayText: `${i.type} - ${i.area} ha`,
+          category: 'Irrigation',
+          categoryColor: '#3b82f6'
+        }));
+
+        // Search soil
+        const soilResults = soilData.filter(soil =>
+          (soil.name && soil.name.toLowerCase().includes(lowerQuery)) ||
+          (soil.series && soil.series.toLowerCase().includes(lowerQuery)) ||
+          (soil.type && soil.type.toLowerCase().includes(lowerQuery)) ||
+          (soil.texture && soil.texture.toLowerCase().includes(lowerQuery)) ||
+          (soil.slope && soil.slope.toLowerCase().includes(lowerQuery)) ||
+          (soil.phase && soil.phase.toLowerCase().includes(lowerQuery)) ||
+          (soil.code && soil.code.toLowerCase().includes(lowerQuery)) ||
+          (soil.subgroup && soil.subgroup.toLowerCase().includes(lowerQuery)) ||
+          (soil.group && soil.group.toLowerCase().includes(lowerQuery)) ||
+          (soil.order && soil.order.toLowerCase().includes(lowerQuery))
+        ).map(s => ({
+          ...s,
+          displayText: `${s.name} - ${s.type}`,
+          category: 'Soil',
+          categoryColor: '#d97706'
+        }));
+
+        // Combine all results
+        allResults = [
+          ...consentResults,
+          ...parcelResults,
+          ...irrigationResults,
+          ...soilResults
+        ];
+
+        if (allResults.length === 0) {
+          searchResults.innerHTML = '<div class="no-results">No results found</div>';
+          return;
+        }
+
+        searchResults.innerHTML = allResults.slice(0, 15).map(result => `
+          <div class="search-result-item" 
+               data-lat="${result.lat}" 
+               data-lon="${result.lon}"
+               data-layer-type="${result.layerType}"
+               data-index="${allResults.indexOf(result)}">
+            <strong style="color: ${result.categoryColor}">
+              [${result.category}] ${result.displayText}
+            </strong>
+            <small>${result.category === 'Consent' ? result.type : 
+                     result.category === 'Soil' ? result.texture : 
+                     result.category === 'Parcel' ? result.status :
+                     result.category === 'Irrigation' ? result.status : ''}</small>
+          </div>
+        `).join('');
+
+        // Add click handlers to results
+        document.querySelectorAll('.search-result-item').forEach((item, index) => {
+          item.addEventListener('click', () => {
+            const resultIndex = parseInt(item.dataset.index);
+            const result = allResults[resultIndex];
+            zoomToFeature(result);
+          });
+        });
+      }
+
+      // Zoom to feature (handles all layer types)
+      function zoomToFeature(feature) {
+        if (feature.layerType === 'consent') {
+          // For point features (consents)
+          map.setView([feature.lat, feature.lon], 16, {
+            animate: true,
+            duration: 1
+          });
+
+          // Pulse effect for marker
+          if (feature.marker) {
+            feature.marker.setStyle({
+              radius: 12,
+              fillOpacity: 1
+            });
+            
+            setTimeout(() => {
+              feature.marker.setStyle({
+                radius: 6,
+                fillOpacity: 0.9
+              });
+            }, 500);
+
+            feature.marker.openPopup();
+          }
+        } else {
+          // For polygon features (parcels, irrigation, soil)
+          map.fitBounds(feature.bounds, {
+            padding: [50, 50],
+            animate: true,
+            duration: 1
+          });
+
+          // Highlight effect for polygon
+          if (feature.layer) {
+            const originalStyle = {
+              weight: feature.layerType === 'irrigation' ? 2 : 1
+            };
+
+            feature.layer.setStyle({
+              weight: 5,
+              color: '#ff0000'
+            });
+
+            setTimeout(() => {
+              feature.layer.setStyle(originalStyle);
+            }, 1000);
+
+            feature.layer.openPopup();
+          }
+        }
+
+        // Clear search results
+        searchResults.innerHTML = '';
+        searchInput.value = '';
+      }
+
+      // Add search event listener with debounce
+      searchInput.addEventListener('input', debounce((e) => {
+        searchAllLayers(e.target.value);
+      }, 300));
+    </script>
+  </body>
+</html>
